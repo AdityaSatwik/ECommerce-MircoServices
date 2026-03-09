@@ -1,0 +1,65 @@
+services:
+  sql-server:
+    image: mcr.microsoft.com/mssql/server:2022-latest
+    environment:
+      - ACCEPT_EULA=Y
+      - MSSQL_SA_PASSWORD=YourStrong@Passw0rd
+    ports:
+      - "1433:1433"
+
+  catalog-service:
+    build:
+      context: .
+      dockerfile: ECommerce.CatalogService/Dockerfile
+    ports:
+      - "8081:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_HTTP_PORTS=8080
+      - ConnectionStrings__DefaultConnection=Server=sql-server;Database=ECommerce_Shared;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True;
+    depends_on:
+      - sql-server
+
+  legacy-inventory:
+    build:
+      context: .
+      dockerfile: ECommerce.LegacyInventory/Dockerfile
+    ports:
+      - "9001:9000"
+    environment:
+      - ConnectionStrings__DefaultConnection=Server=sql-server;Database=ECommerce_Shared;User Id=sa;Password=YourStrong@Passw0rd;TrustServerCertificate=True;
+    depends_on:
+      - sql-server
+
+  api-gateway:
+    build:
+      context: .
+      dockerfile: ECommerce.ApiGateway/Dockerfile
+    ports:
+      - "5000:8080"
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Development
+      - ASPNETCORE_HTTP_PORTS=8080
+    depends_on:
+      - catalog-service
+      - legacy-inventory
+
+  order-service:
+    build:
+      context: .
+      dockerfile: ECommerce.OrderService/Dockerfile
+    environment:
+      - InventoryServiceUrl=http://api-gateway:8080/api/inventory
+    depends_on:
+      - api-gateway
+
+  web-app:
+    build:
+      context: .
+      dockerfile: ECommerce.Web/Dockerfile
+    ports:
+      - "8080:8080"
+    environment:
+      - GatewayUrl=http://api-gateway:8080
+    depends_on:
+      - api-gateway
